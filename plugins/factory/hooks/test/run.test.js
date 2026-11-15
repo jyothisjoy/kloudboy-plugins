@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const cp = require('node:child_process');
+const http = require('node:http');
 
 const RUN = path.join(__dirname, '..', 'run.js');
 
@@ -88,6 +89,8 @@ test('planner and reviewer may write only their own file', () => {
   assert.match(r.stderr, /planner may only write \.factory\/plan\.md; "src\/index\.ts"/);
   assert.strictEqual(edit('factory:reviewer', '.factory/review.md').code, 0);
   assert.strictEqual(edit('factory:reviewer', '.factory/plan.md').code, 2);
+  assert.strictEqual(edit('factory:security-reviewer', '.factory/security.md').code, 0);
+  assert.strictEqual(edit('factory:security-reviewer', 'src/auth.ts').code, 2, 'the security reviewer never fixes code');
   assert.strictEqual(edit('planner', 'src/index.ts').code, 2, 'a project override of the planner keeps the limit');
   assert.strictEqual(hook(env, 'pre-edit', { tool_name: 'Write', tool_input: file(env, 'src/index.ts') }).code, 0, 'main session is not limited');
 });
@@ -180,6 +183,73 @@ test('session start warns when factory_version differs from the plugin', () => {
 
   const same = setup([...BASE, `factory_version: ${version}`].join('\n'));
   assert.strictEqual(hook(same, 'session-start', {}).stdout, '');
+});
+
+test('session start registers the project folder for the dashboard', () => {
+  const env = setup(BASE.join('\n'));
+  hook(env, 'session-start', {});
+  const list = JSON.parse(fs.readFileSync(path.join(env.home, '.factory', 'projects.json'), 'utf8'));
+  assert.strictEqual(list['my-app'], env.root);
+});
+
+test('events carry the skipped agents of the run', () => {
+  const env = setup(BASE.join('\n'));
+  fs.mkdirSync(path.join(env.root, '.factory', 'state'));
+  fs.writeFileSync(path.join(env.root, '.factory', 'state', 'run.json'), JSON.stringify({ kind: 'bugfix', title: 'T', skip: ['tester', 'reviewer'] }));
+  hook(env, 'stop', {});
+  assert.strictEqual(events(env)[0].run_skip, 'tester,reviewer');
+  assert.strictEqual(events(env)[0].run_kind, 'bugfix');
+});
+
+// Team mode posts to the collector named in the developer's environment, never in the repo's config.
+function collector() {
+  const got = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => { got.push({ url: req.url, key: req.headers['x-factory-key'], body }); res.writeHead(204).end(); });
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ got, server, url: `http://127.0.0.1:${server.address().port}` })));
+}
+function hookAsync(env, event, input, extraEnv) {
+  return new Promise((resolve) => {
+    const child = cp.spawn(process.execPath, [RUN, event], {
+      env: { ...process.env, HOME: env.home, USERPROFILE: env.home, CLAUDE_PLUGIN_ROOT: '', FACTORY_DASHBOARD_URL: '', ...extraEnv },
+    });
+    child.on('close', resolve);
+    child.stdin.end(JSON.stringify({ session_id: 's1', cwd: env.root, ...input }));
+  });
+}
+
+test('team mode ignores a URL in project config', async () => {
+  const c = await collector();
+  const env = setup([...BASE, 'dashboard:', '  mode: team', `  url: ${c.url}`].join('\n'));
+  await hookAsync(env, 'stop', {}, { FACTORY_DASHBOARD_KEY: 'k1' });
+  c.server.close();
+  assert.strictEqual(c.got.length, 0, 'nothing is sent to a URL a repo chose');
+});
+
+test('team mode posts to FACTORY_DASHBOARD_URL with the key', async () => {
+  const c = await collector();
+  const env = setup([...BASE, 'dashboard:', '  mode: team'].join('\n'));
+  await hookAsync(env, 'stop', {}, { FACTORY_DASHBOARD_URL: c.url + '/', FACTORY_DASHBOARD_KEY: 'k1' });
+  c.server.close();
+  assert.strictEqual(c.got.length, 1);
+  assert.strictEqual(c.got[0].url, '/events');
+  assert.strictEqual(c.got[0].key, 'k1');
+  assert.strictEqual(JSON.parse(c.got[0].body).type, 'run_end');
+});
+
+test('team collector URL must be https unless it is this machine', () => {
+  const { teamUrl } = require('../lib/common');
+  const at = (v) => { process.env.FACTORY_DASHBOARD_URL = v; return teamUrl(); };
+  try {
+    assert.strictEqual(at('https://factory.example.com/'), 'https://factory.example.com/events');
+    assert.strictEqual(at('http://127.0.0.1:4317'), 'http://127.0.0.1:4317/events');
+    assert.strictEqual(at('http://factory.example.com'), null);
+    assert.strictEqual(at('file:///etc/passwd'), null);
+    assert.strictEqual(at(''), null);
+  } finally { delete process.env.FACTORY_DASHBOARD_URL; }
 });
 
 test('dashboard mode off writes no events', () => {

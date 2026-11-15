@@ -35,6 +35,7 @@ function writeAllowList(agent, cfg) {
   return {
     planner: ['.factory/plan.md'],
     reviewer: ['.factory/review.md'],
+    'security-reviewer': ['.factory/security.md'],
     'ui-checker': ['.factory/review.md', '.factory/state/'],
     'ui-designer': [lab.endsWith('/') ? lab : lab + '/', 'design/'],
   }[agent] || null;
@@ -51,6 +52,7 @@ async function main() {
       fs.writeFileSync(path.join(c.HOME_DIR, 'plugin-root'), process.env.CLAUDE_PLUGIN_ROOT);
     }
     const cfg = root && c.loadConfig(root);
+    if (cfg) c.registerProject(cfg, root);
     const want = cfg && cfg.factory_version ? String(cfg.factory_version) : '';
     if (want && PLUGIN_VERSION && want !== PLUGIN_VERSION) {
       const msg = `Factory: .factory/config.yml says factory_version ${want} but factory ${PLUGIN_VERSION} is installed. Read the release notes in the factory's docs/decisions.md, then update the plugin or factory_version.`;

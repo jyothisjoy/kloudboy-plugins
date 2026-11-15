@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Factory runs</title>
+<meta name="factory-token" content="__FACTORY_TOKEN__">
 <style>
 /* Tokens and rules: docs/dashboard-ui.md */
 :root, [data-theme="light"] {
@@ -80,6 +81,31 @@ tr.row[aria-selected="true"] td { background:var(--bg-tint); }
 .empty { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:24px; }
 .empty .dot { width:40px; height:40px; border-radius:50%; background:var(--bg-tint); }
 code { font:500 13px/18px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.btn { min-height:44px; padding:0 20px; border-radius:999px; border:1px solid var(--border-control); background:var(--bg-surface); cursor:pointer; font:600 14px/20px var(--font); }
+.btn:hover { background:var(--bg-sunken); }
+.btn-primary { background:var(--bg-tint); color:var(--text-tint); border-color:transparent; }
+.btn-primary:hover { background:var(--bg-sunken); }
+.btn:disabled { cursor:default; opacity:0.6; }
+.launch { display:flex; flex-direction:column; gap:12px; }
+.launch .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; }
+.launch .title { font:700 18px/24px var(--font); }
+.msg { white-space:pre-wrap; overflow-wrap:anywhere; background:var(--bg-sunken); border-radius:16px; padding:12px 16px; max-height:320px; overflow:auto; font:400 14px/20px var(--font); margin:0; }
+details summary { cursor:pointer; font:600 14px/20px var(--font); min-height:44px; display:flex; align-items:center; }
+label, legend { font:600 14px/20px var(--font); }
+.field { display:flex; flex-direction:column; gap:4px; }
+textarea, select { font:400 15px/22px var(--font); color:var(--text-primary); background:var(--bg-surface); border:1px solid var(--border-control); border-radius:16px; padding:10px 12px; width:100%; }
+select { min-height:44px; border-radius:999px; padding:0 12px; }
+textarea { resize:vertical; }
+fieldset { border:0; padding:0; margin:0; display:flex; flex-direction:column; gap:4px; }
+.checks { display:flex; flex-wrap:wrap; gap:4px 16px; }
+.check { display:flex; align-items:center; gap:8px; min-height:44px; font:400 14px/20px var(--font); }
+.check input { width:20px; height:20px; accent-color:var(--focus-ring); }
+.form-error { color:var(--danger-text); font:600 14px/20px var(--font); margin:0; min-height:20px; }
+dialog { border:0; border-radius:24px; padding:24px; width:min(640px, calc(100vw - 32px)); max-height:calc(100vh - 32px); background:var(--bg-surface); color:var(--text-primary); }
+[data-theme="dark"] dialog { border:1px solid var(--border); }
+dialog::backdrop { background:rgba(10,15,13,0.5); }
+dialog form { display:flex; flex-direction:column; gap:16px; }
 @media (max-width:1199px) { .stat { grid-column:span 6; } .hero, .half { grid-column:span 12; } }
 @media (max-width:767px) { .app { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--border); } main { padding:16px; } .stat { grid-column:span 6; } .li { grid-template-columns:64px minmax(0,1fr); } .li > :nth-child(2), th:nth-child(2), td:nth-child(2) { display:none; } }
 @media (prefers-reduced-motion:no-preference) { .proj, tr.row td { transition:background 120ms ease-out; } }
@@ -95,16 +121,92 @@ code { font:500 13px/18px ui-monospace, SFMono-Regular, Consolas, monospace; }
   <main>
     <header>
       <div><h1 id="page-title">Runs</h1><div class="caption" id="subtitle">Live from ~/.factory/runs</div></div>
-      <button class="icon-btn" id="theme" aria-label="Switch to dark mode"><span aria-hidden="true">◐</span></button>
+      <div class="actions">
+        <button class="btn btn-primary" id="new-run-open" hidden>New run</button>
+        <button class="icon-btn" id="theme" aria-label="Switch to dark mode"><span aria-hidden="true">◐</span></button>
+      </div>
     </header>
     <div id="content"></div>
   </main>
 </div>
+<dialog id="new-run" aria-labelledby="new-run-title">
+  <form id="new-run-form">
+    <h2 id="new-run-title">New run</h2>
+    <div class="field"><label for="nr-project">Project</label><select id="nr-project" name="project"></select></div>
+    <div class="field">
+      <label for="nr-kind">Type</label>
+      <select id="nr-kind" name="kind">
+        <option value="feature">Feature</option>
+        <option value="bugfix">Bug fix</option>
+        <option value="security">Security check</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="nr-spec" id="nr-spec-label">Spec</label>
+      <span class="caption" id="nr-spec-help"></span>
+      <textarea id="nr-spec" name="spec" rows="9" maxlength="20000" aria-describedby="nr-spec-help"></textarea>
+    </div>
+    <fieldset>
+      <legend>Agents</legend>
+      <span class="caption" id="nr-agents-help"></span>
+      <div class="checks" id="nr-agents"></div>
+    </fieldset>
+    <div class="field">
+      <label for="nr-mode">Permissions</label>
+      <select id="nr-mode" name="mode" aria-describedby="nr-mode-help">
+        <option value="acceptEdits">Accept edits</option>
+        <option value="auto">Auto</option>
+      </select>
+      <span class="caption" id="nr-mode-help"></span>
+    </div>
+    <p class="form-error" id="nr-error" role="alert"></p>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary" id="nr-submit">Start run</button>
+      <button type="button" class="btn" id="nr-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <script>
 'use strict';
-const STAGES = ['planner', 'ui-designer', 'implementer', 'tester', 'debugger', 'reviewer', 'ui-checker'];
-const LABEL = { planner: 'Planner', 'ui-designer': 'UI designer', implementer: 'Implementer', tester: 'Tester', debugger: 'Debugger', 'ui-checker': 'UI checker', reviewer: 'Reviewer', orchestrator: 'Orchestrator' };
-const state = { projects: [], project: null, events: [], run: null, stream: null };
+const STAGES = ['security-reviewer', 'planner', 'ui-designer', 'implementer', 'tester', 'debugger', 'reviewer', 'ui-checker'];
+const LABEL = { 'security-reviewer': 'Security reviewer', planner: 'Planner', 'ui-designer': 'UI designer', implementer: 'Implementer', tester: 'Tester', debugger: 'Debugger', 'ui-checker': 'UI checker', reviewer: 'Reviewer', orchestrator: 'Orchestrator' };
+const state = { projects: [], project: null, events: [], run: null, stream: null, launches: [], drafts: {} };
+// The server puts a fresh token in the page; only this page can start runs or reply.
+const TOKEN = document.querySelector('meta[name="factory-token"]').content;
+const CAN_LAUNCH = Boolean(TOKEN) && !TOKEN.startsWith('__');
+// What each run type asks for, which agents always run, and which can be turned off.
+const KINDS = {
+  feature: {
+    label: 'Feature', field: 'Spec', required: true, approve: ['Approve plan', 'Plan approved. Continue the run.'],
+    help: "What to build and how you'll know it's done. Runs /factory:feature in the project.",
+    always: ['planner', 'implementer'], optional: ['tester', 'debugger', 'reviewer', 'ui-checker'],
+  },
+  bugfix: {
+    label: 'Bug fix', field: 'Bug report', required: true, approve: ['Approve fix plan', 'Diagnosis approved. Continue the run.'],
+    help: 'What happens, what should happen, and how to make it happen. Runs /factory:bugfix: diagnose, reproduce with a failing test, fix.',
+    always: ['planner', 'debugger'], optional: ['tester', 'reviewer'],
+  },
+  security: {
+    label: 'Security check', field: 'Focus (optional)', required: false, approve: ['Fix all findings', 'Fix all findings. Continue the run.'],
+    help: 'Paths, an area, or "changes since <branch>". Leave empty to check the whole project. Runs /factory:security; you pick which findings to fix.',
+    always: ['security-reviewer', 'implementer'], optional: ['tester', 'debugger', 'reviewer'],
+  },
+};
+const MODE_HELP = {
+  acceptEdits: 'File edits are allowed. Shell commands (verify, tests, git) must be in your permission allow rules, or the run stops on them.',
+  auto: 'Claude Code decides each action. Needs auto mode on your account.',
+};
+
+async function api(url, body) {
+  const r = await fetch(url, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'content-type': 'application/json', 'x-factory-token': TOKEN },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+  return j;
+}
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);
@@ -146,6 +248,8 @@ function analyse(run) {
   const ev = run.events.sort((a, b) => a.at - b.at);
   run.first = ev[0].at; run.last = ev.at(-1).at;
   run.title = [...ev].reverse().find((e) => e.run_title)?.run_title || 'Untitled run';
+  run.kind = [...ev].reverse().find((e) => e.run_kind)?.run_kind || 'feature';
+  run.skip = String([...ev].reverse().find((e) => e.run_skip)?.run_skip || '').split(',').filter(Boolean);
   run.stages = {};
   for (const e of ev) {
     if (!STAGES.includes(e.agent)) continue;
@@ -168,7 +272,8 @@ function analyse(run) {
   return run;
 }
 
-function stagePill(s) {
+function stagePill(s, skipped) {
+  if (!s && skipped) return pill('Skipped', 'neutral');
   if (!s) return pill('Not started', 'neutral');
   if (s.active) return pill('Working', 'accent');
   if (s.result === 'verify_failed') return pill('Verify failed', 'danger');
@@ -195,7 +300,64 @@ function eventText(e) {
   return e.type;
 }
 
+const LAUNCH_STATUS = {
+  running: ['Working', 'neutral'], waiting: ['Waiting for you', 'warning'], done: ['Finished', 'tint'],
+  failed: ['Session failed', 'danger'], stopped: ['Stopped', 'neutral'],
+};
+const MODE_LABEL = { acceptEdits: 'Accept edits', auto: 'Auto' };
+
+// The newest run started from the dashboard: its state, the orchestrator's last message and, while
+// it waits, the plan with Approve and Reply.
+function launchCard() {
+  const job = state.launches[0];
+  if (!job) return null;
+  const [label, kind] = LAUNCH_STATUS[job.status] || [job.status, 'neutral'];
+  const err = h('p', { class: 'form-error', role: 'alert' });
+  const act = (url, body) => async (e) => {
+    e.target.disabled = true; err.textContent = '';
+    try { await api(url, body()); if (url === '/api/reply') delete state.drafts[job.id]; await loadEvents(); }
+    catch (x) { err.textContent = x.message; e.target.disabled = false; }
+  };
+  const meta = [`Started ${fmtTime(job.started)}`, MODE_LABEL[job.mode] || job.mode];
+  if (job.skip && job.skip.length) meta.push('Off: ' + job.skip.map((a) => LABEL[a] || a).join(', '));
+  const kids = [
+    h('div', { class: 'head' }, h('h2', { style: 'margin:0' }, 'Started from the dashboard'), pill(label, kind)),
+    h('div', { class: 'title' }, job.title),
+    h('div', { class: 'caption num' }, [(KINDS[job.kind] || KINDS.feature).label, ...meta].join(' · ')),
+  ];
+  if (job.status === 'running') {
+    kids.push(h('div', {}, 'The factory is working. Stages appear below as agents start.'));
+    kids.push(h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: act('/api/stop', () => ({ id: job.id })) }, 'Stop run')));
+  } else {
+    if (job.message) kids.push(h('div', { class: 'caption' }, 'Last message from the factory'), h('pre', { class: 'msg' }, job.message));
+    if (job.plan) kids.push(h('details', {}, h('summary', {}, 'Plan (.factory/plan.md)'), h('pre', { class: 'msg' }, job.plan)));
+    if (job.report) kids.push(h('details', {}, h('summary', {}, 'Findings (.factory/security.md)'), h('pre', { class: 'msg' }, job.report)));
+    const box = h('textarea', { id: 'reply', rows: '3', 'aria-label': 'Reply to the factory', placeholder: job.kind === 'security' ? 'Reply: which findings to fix (for example S1, S3), or none' : 'Reply: answer a question, ask for plan changes, or tell it to continue' });
+    box.value = state.drafts[job.id] || '';
+    box.addEventListener('input', () => { state.drafts[job.id] = box.value; });
+    kids.push(box);
+    const buttons = [];
+    if (job.status === 'waiting' && (job.plan || job.report)) {
+      const [label, text] = (KINDS[job.kind] || KINDS.feature).approve;
+      buttons.push(h('button', { class: 'btn btn-primary', onclick: act('/api/reply', () => ({ id: job.id, text })) }, label));
+    }
+    buttons.push(h('button', { class: 'btn', onclick: (e) => box.value.trim() ? act('/api/reply', () => ({ id: job.id, text: box.value }))(e) : (err.textContent = 'Write a reply first.') }, 'Send reply'));
+    buttons.push(h('button', { class: 'btn', onclick: act('/api/dismiss', () => ({ id: job.id })) }, 'Dismiss'));
+    kids.push(h('div', { class: 'actions' }, buttons));
+  }
+  kids.push(err);
+  return h('section', { class: 'card wide launch', 'aria-label': 'Run started from the dashboard' }, kids);
+}
+
 function render() {
+  const focused = document.activeElement && document.activeElement.id === 'reply';
+  renderPage();
+  const box = document.getElementById('reply');
+  if (focused && box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+  document.getElementById('new-run-open').hidden = !CAN_LAUNCH || !state.projects.some((p) => p.launchable);
+}
+
+function renderPage() {
   const nav = document.getElementById('projects');
   nav.replaceChildren(...state.projects.map((p) => h('button', {
     class: 'proj', 'aria-current': String(p.name === state.project),
@@ -210,7 +372,12 @@ function render() {
     return;
   }
   const runs = groupRuns(state.events);
-  if (!runs.length) { root.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'dot' }), h('h2', {}, 'No runs in the last 14 days'))); return; }
+  const launch = launchCard();
+  if (!runs.length) {
+    root.replaceChildren(h('div', { class: 'bento' }, launch, h('div', { class: 'card empty wide' }, h('div', { class: 'dot' }), h('h2', {}, 'No runs in the last 14 days'),
+      h('div', {}, CAN_LAUNCH ? 'Start one with New run, or run /factory:feature in the project.' : 'Run /factory:feature in the project.'))));
+    return;
+  }
   const run = runs.find((r) => r.id === state.run) || runs[0];
   state.run = run.id;
 
@@ -220,7 +387,7 @@ function render() {
   const avgLoops = reviewed.length ? (reviewed.reduce((n, r) => n + r.reviews, 0) / reviewed.length).toFixed(1) : '—';
 
   const hero = h('section', { class: 'card hero', 'aria-label': 'Selected run' },
-    h('div', { class: 'caption' }, run === runs[0] ? 'Latest run' : 'Selected run'),
+    h('div', { class: 'caption' }, `${run === runs[0] ? 'Latest run' : 'Selected run'} · ${(KINDS[run.kind] || KINDS.feature).label}`),
     h('div', { class: 'title' }, run.title),
     h('div', { class: 'big' }, run.active ? LABEL[run.active] : run.status[0]),
     h('div', {}, pill(run.status[0], run.status[1] === 'danger' ? 'danger' : 'onbrand')),
@@ -230,8 +397,8 @@ function render() {
   const stat = (label, value) => h('section', { class: 'card stat' }, h('div', { class: 'caption' }, label), h('div', { class: 'big num' }, value));
 
   const stages = h('section', { class: 'card wide' }, h('h2', {}, 'Pipeline'),
-    h('div', { class: 'stages' }, STAGES.filter((s) => run.stages[s] || ['planner', 'implementer', 'tester', 'reviewer'].includes(s)).map((s) =>
-      h('div', { class: 'stage' }, h('b', {}, LABEL[s]), stagePill(run.stages[s]),
+    h('div', { class: 'stages' }, STAGES.filter((s) => run.stages[s] || run.skip.includes(s) || [...(KINDS[run.kind] || KINDS.feature).always, 'tester', 'reviewer'].includes(s)).map((s) =>
+      h('div', { class: 'stage' }, h('b', {}, LABEL[s]), stagePill(run.stages[s], run.skip.includes(s)),
         h('span', { class: 'caption num' }, run.stages[s] ? stageMeta(run.stages[s]) : '')))));
 
   const table = h('section', { class: 'card half' }, h('h2', {}, 'Runs'),
@@ -247,7 +414,7 @@ function render() {
     h('div', { class: 'list' }, [...run.events].reverse().slice(0, 150).map((e) =>
       h('div', { class: 'li' }, h('span', { class: 'caption num' }, fmtClock(e.at)), h('span', { class: 'caption' }, LABEL[e.agent] || e.agent || ''), h('span', {}, eventText(e))))));
 
-  root.replaceChildren(h('div', { class: 'bento' }, hero,
+  root.replaceChildren(h('div', { class: 'bento' }, launch, hero,
     stat('Verify pass rate, 14 days', rate), stat('Runs, 14 days', String(runs.length)),
     stat('Average review rounds', avgLoops), stat('Files touched, this run', String(run.files.length)),
     stages, table, timeline));
@@ -255,9 +422,58 @@ function render() {
 
 async function loadEvents() {
   if (!state.project) return render();
-  state.events = await (await fetch('/api/events?project=' + encodeURIComponent(state.project))).json();
+  const q = '?project=' + encodeURIComponent(state.project);
+  state.events = await (await fetch('/api/events' + q)).json();
+  state.launches = CAN_LAUNCH ? await api('/api/launches' + q).catch(() => []) : [];
   render();
 }
+
+const dialog = document.getElementById('new-run');
+const form = document.getElementById('new-run-form');
+const modeSel = document.getElementById('nr-mode');
+const showModeHelp = () => { document.getElementById('nr-mode-help').textContent = MODE_HELP[modeSel.value]; };
+modeSel.addEventListener('change', showModeHelp);
+const kindSel = document.getElementById('nr-kind');
+// Field label, help and agent switches follow the run type.
+function showKind() {
+  const k = KINDS[kindSel.value];
+  document.getElementById('nr-spec-label').textContent = k.field;
+  document.getElementById('nr-spec-help').textContent = k.help;
+  document.getElementById('nr-spec').required = k.required;
+  document.getElementById('nr-agents-help').textContent = `${k.always.map((a) => LABEL[a]).join(' and ')} always run. Turning an agent off never turns a gate off.`;
+  document.getElementById('nr-agents').replaceChildren(
+    ...k.always.map((a) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: '', disabled: '' }), LABEL[a])),
+    ...k.optional.map((a) => h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'agent', value: a, checked: '' }), LABEL[a])));
+}
+kindSel.addEventListener('change', showKind);
+document.getElementById('new-run-open').addEventListener('click', () => {
+  const sel = document.getElementById('nr-project');
+  sel.replaceChildren(...state.projects.filter((p) => p.launchable).map((p) => h('option', { value: p.name }, p.name)));
+  if (state.projects.some((p) => p.launchable && p.name === state.project)) sel.value = state.project;
+  document.getElementById('nr-error').textContent = '';
+  showKind();
+  showModeHelp();
+  dialog.showModal();
+  document.getElementById('nr-spec').focus();
+});
+document.getElementById('nr-cancel').addEventListener('click', () => dialog.close());
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = new FormData(form);
+  const on = data.getAll('agent');
+  const kind = data.get('kind');
+  const skip = KINDS[kind].optional.filter((a) => !on.includes(a));
+  const submit = document.getElementById('nr-submit');
+  submit.disabled = true;
+  try {
+    await api('/api/launch', { project: data.get('project'), kind, spec: data.get('spec'), skip, mode: data.get('mode') });
+    dialog.close();
+    form.reset();
+    state.run = null; // show the new run, not the one selected before
+    if (data.get('project') !== state.project) selectProject(data.get('project')); else loadEvents();
+  } catch (x) { document.getElementById('nr-error').textContent = x.message; }
+  submit.disabled = false;
+});
 
 function selectProject(name) {
   state.project = name; state.run = null; store.set('factory.project', name);

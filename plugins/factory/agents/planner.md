@@ -35,4 +35,13 @@ Rules:
 - No task may edit a path listed in `protected_paths` unless the spec explicitly requires it; flag it under Questions.
 - Plan only what the spec asks. No extra features, refactors or "nice to haves".
 
+When the brief is a bug report (from /factory:bugfix):
+- Find the root cause before planning: trace the reported behaviour through the code, and read
+  recent history of the files involved (you may not run commands, so use what you can read).
+- Put the root cause, and the evidence for it, at the top of Assumptions. If you can't find it,
+  say what you checked and put the gap under Questions.
+- Plan one task unless the fix truly needs more: `Reproduce and fix: <bug>`. Its "Done when" names
+  a regression test that fails on the current code and passes after the fix, plus verify passing.
+- Fix the cause, not the symptom; no unrelated clean-up.
+
 Return a short summary: number of tasks, assumptions, and any open questions.

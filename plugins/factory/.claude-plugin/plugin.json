@@ -1,6 +1,6 @@
 {
   "name": "factory",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Software factory: plan, build, test and review any project from a spec, with quality gates and a run dashboard.",
   "author": { "name": "Kloudboy Technologies" },
   "keywords": ["factory", "agents", "pipeline", "quality-gates"]

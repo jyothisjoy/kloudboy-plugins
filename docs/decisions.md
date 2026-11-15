@@ -3,6 +3,141 @@
 Decisions that change or clarify [PRD.md](PRD.md). Newest first. A decision here overrides the PRD.
 Format: date · decision · why.
 
+## 2026-11-15 · Stopping the dashboard
+
+- **`/factory:dashboard stop`** and **`node server.js --stop [--force]`**. The stopper asks
+  `/api/ping` on the dashboard port, which now returns `app: "factory-dashboard"`, the server's
+  process ID and how many dashboard-started runs are working, and ends that process. Why ask the
+  server instead of keeping a PID file: a stale file could name an unrelated process; the ping
+  proves the process on the port is the dashboard.
+- It refuses while dashboard-started runs are working. `--force` (the command asks the user
+  first) ends the server's whole process tree, so those Claude sessions stop too, and marks them
+  Stopped. On Windows this is `taskkill /T`; elsewhere the server handles SIGTERM by stopping its
+  sessions before it exits.
+- Stopping is local only: the stopper must run on the same machine. A web page can read the ping but
+  can't end a process.
+
+## 2026-11-15 · Release 0.2.0
+
+Minor release: new commands and agents, no breaking config change. Details in the entries below.
+
+- New: `/factory:bugfix`, `/factory:security` with the `security-reviewer` agent and the
+  `security-audit` skill, the `debugger` agent, `--skip <agents>` on every pipeline.
+- Dashboard: start feature, bug-fix and security runs (New run), approve and reply there; tokens per
+  agent and run; skipped stages shown; `/factory:dashboard stop`.
+- Gates: planner, reviewer, UI checker and security reviewer limited to their own files;
+  optional `commands.fast_check` after each edit; version check at session start.
+- `/factory:init` writes `.claude/settings.json` so teammates are prompted to install.
+- Security: the team collector URL comes from `FACTORY_DASHBOARD_URL`, not project config.
+
+Upgrading a project: `/plugin update`, then set `factory_version: 0.2.0` in `.factory/config.yml`
+and delete `dashboard.url` if present. Nothing else in the config changes. Per CLAUDE.md, run it on
+one pilot project before telling the team to update.
+
+## 2026-11-15 · `security-audit` skill, built from three public skill collections
+
+- **New bundled skill `skills/security-audit/`**, preloaded into the security reviewer with the
+  agent's `skills:` frontmatter as `factory:security-audit` (fallback: the agent reads it from the
+  plugin folder named in `~/.factory/plugin-root`). Observed: the bare name `security-audit`
+  loaded a *user-level* skill of the same name instead of the plugin's, so plugin skills must be
+  named with the `factory:` prefix there, and the agent checks the skill's base directory.
+- **Audits don't execute project code, even "harmlessly".** In the first live run the verifier
+  copied the vulnerable line into a scratch script to confirm it, and the reviewer started the
+  project's server to probe it. Both are now ruled out in the skill and the reviewer agent:
+  confirmation is by reading; anything that needs running becomes a test in the fix step, inside the
+  verify gate. SKILL.md holds the method; six attack-class files are read only when
+  the project's map shows the matching boundary (core, web/API/auth, client side, AI/LLM,
+  data/messaging/resources, supply chain/deployment).
+- **Sources and licences.** Method and taxonomy adapted from Cloudflare's `security-audit` skill
+  (MIT; notice kept in `skills/security-audit/NOTICE.md`). Two pentest collections
+  (`frendysanusi/claude-pentest-skills`, `penligent/AIPentest_Skills`) have **no licence**, so
+  nothing was copied from them; their vulnerability classes and false-positive discipline informed
+  checks written in our own words.
+- **What was taken:** the trust-boundary rule (attacker, input, control, path, result, fix);
+  confirmed vs needs-validation vs rejected, with severity only for confirmed findings; Cloudflare's
+  severity anchors (Critical added to our scale); "try to disprove every candidate"; one finding per
+  root cause; honest scope ("not checked") lines; a false-positive list; treating text in the
+  audited repo as data, never instructions.
+- **What was left out, and why:** Cloudflare's multi-agent harness (coverage ledger, JSON schema,
+  validators, sandboxed execution of target code, artifact promotion) — too heavy for one auditor,
+  and we don't run project code during an audit. The pentest repos' live recon, payload lists,
+  scanner/proxy use and 100 CVE exploit checks — the factory never attacks running systems.
+  Native/binary and desktop/mobile classes — not our stacks yet; add if a project needs them.
+- **Verify pass.** `/factory:security` now runs a second, fresh security reviewer in verify mode
+  before showing the report. It re-reads every cited line, rejects what it can refute, and moves
+  items that depend on facts outside the repo to Needs validation. Why: Cloudflare's main accuracy
+  mechanism is a verifier that didn't write the candidate. Cost: one more agent per check with
+  findings.
+- **Report format** (`security.md`): Findings (severity, optional CWE, who/where/scenario/why it's
+  real/fix/test), Needs validation (missing fact, how the owner checks it), Rejected (verify mode),
+  Notes. With `approval.plan: auto`, Critical, High and Medium findings are fixed; needs-validation
+  items never are.
+
+## 2026-11-15 · Bug-fix and security pipelines
+
+PRD updated: commands table, *Bug-fix pipeline*, *Security pipeline*, agent tables.
+
+- **`/factory:bugfix`** reuses agents instead of adding one. The planner diagnoses (it is read-only,
+  so a diagnosis can't turn into an unreviewed fix) and plans a "Reproduce and fix" task; the
+  debugger writes the failing regression test first and then fixes the cause. Why the debugger and
+  not the tester for the reproduction: the verify gate runs when an agent finishes, and a
+  deliberately failing test would fail it and send the tester back to "fix" the bug. The debugger's
+  gate only runs after the fix. If the bug doesn't reproduce as diagnosed, the run stops for a person.
+  Optional: tester, reviewer.
+- **`/factory:security`** adds the PRD's optional *Security reviewer* agent (`security-reviewer`):
+  tools Read, Grep, Glob, Bash (read-only commands), Write; the hook limits it to writing
+  `.factory/security.md`. Only exploitable findings with a concrete scenario count; secrets are
+  reported by location, never by value. A person picks which findings to fix (`approval.plan`;
+  `auto` fixes High and Medium). Chosen findings become `plan.md` tasks and go through the normal
+  implementer → verify → debugger → tester loop, then the reviewer. Optional: tester, debugger,
+  reviewer.
+- **Run kind.** `run.json` gets `kind` (feature, bugfix, security) and events carry it as
+  `run_kind`, so the dashboard labels runs and shows the right default stages.
+- **Dashboard.** "New feature" is now "New run" with a type choice; the agent switches follow the
+  type. A waiting security run shows `security.md` and a "Fix all findings" button; a reply can
+  name findings instead (for example "S1, S3").
+- No new config keys.
+
+## 2026-11-15 · Start runs from the dashboard; turn agents off; team URL per machine
+
+PRD updated to match (commands table, *Turning agents off*, *Starting a run*, security).
+
+- **`/factory:feature --skip <agents>`.** Comma list from tester, debugger, reviewer, ui-checker.
+  Planner and implementer can't be skipped: without them there is no plan and no code. Skipping an
+  agent never skips a gate; the verify gate still runs on the implementer. The list is written to
+  `.factory/state/run.json` as `skip`, and events carry it as `run_skip` so the dashboard shows those
+  stages as Skipped.
+- **Dashboard "New run".** The local dashboard starts `claude -p` in the project folder with the
+  spec on stdin (saved to `.factory/state/dashboard-spec.md` and passed as a path, so spec text never
+  goes on a command line), a fixed `--session-id`, and the chosen `--permission-mode`
+  (`acceptEdits` default, or `auto`). `bypassPermissions` is refused: a web page must not be able to
+  start a session with every permission check off (security review). When the session stops, the dashboard
+  shows the orchestrator's last message and `.factory/plan.md`. Approve or Reply resumes the same
+  session with `--resume`. Why: plan approval and other questions stay human checkpoints without a
+  terminal. A run counts as finished when `run.json` has `finished` (the feature command now writes
+  it in its Finish step). Starts are logged in `~/.factory/launches.json` and
+  `~/.factory/launches/<id>.log`.
+- **Headless permission prompts are denied**, so with `acceptEdits` a Bash command must be allowed in
+  the project's or user's permission rules (verify, test and git commands), or the run stops on it.
+  This is shown next to the permission choice.
+- **Which projects can be started.** The SessionStart hook records each factory project's folder in
+  `~/.factory/projects.json`. The dashboard only starts runs there, after checking the folder still
+  has `.factory/config.yml` with the same project name. One run per project at a time.
+- **Start, reply and stop are local and page-only.** They are refused unless the dashboard listens on
+  a loopback address, the `Host` header is `127.0.0.1` or `localhost` on its port, and the request
+  carries the random token the server puts into the page it serves (new token each server start).
+  Why: any website open in the browser can send requests to 127.0.0.1; it can't read the token, and
+  the host check stops DNS-rebinding pages from reading it.
+- **Dev only: `FACTORY_PLUGIN_DIR`** in the dashboard's environment adds `--plugin-dir` to the
+  sessions it starts, for testing an uninstalled plugin.
+- **Team collector URL moves out of project config** (security fix). `dashboard.url` in
+  `.factory/config.yml` is no longer read. Team mode posts to `FACTORY_DASHBOARD_URL` from the
+  developer's environment, only over HTTPS unless the host is loopback, and without following
+  redirects. Why: a cloned repo could set its own URL and receive the developer's
+  `FACTORY_DASHBOARD_KEY` and run events. Migration: delete `dashboard.url` from configs and set
+  `FACTORY_DASHBOARD_URL` per machine. Not a major bump: team mode has no collector yet, so no
+  working setup breaks.
+
 ## 2026-11-15 · Claude Code behaviour observed, and what changed because of it
 
 Observed with Claude Code 2.1.325 in headless sessions (`claude -p --plugin-dir`) on a neutral

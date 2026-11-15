@@ -77,8 +77,8 @@ Four core agents ship in v1; the rest are added only when a real failure calls f
 | UI designer | A spec involves new screens or a redesign (see UI R&D) |
 | UI checker | A project has no test suite, or UI must match reference shots; drives Playwright |
 | Spec writer | Requests arrive loosely worded, e.g. from email or issue intake |
-| Debugger | The implementer fails the verify gate twice on one task |
-| Security reviewer | Client-facing apps, auth, secrets or dependency changes |
+| Debugger | The implementer fails the verify gate twice on one task; also the fixer in `/factory:bugfix` |
+| Security reviewer | Client-facing apps, auth, secrets or dependency changes. Runs in `/factory:security`; read-only, writes `security.md`, follows the bundled `security-audit` skill; a second fresh instance verifies the report |
 | Migration agent | Prisma schema changes need isolating from feature code |
 | Docs / release agent | PR description, changelog and README updates at the end |
 
@@ -91,10 +91,12 @@ The orchestrator (the main session running a command) calls each agent in turn; 
 | Command | What it does |
 | --- | --- |
 | `/factory:init` | Inspects the repo, writes config + CLAUDE.md draft, stops for review |
-| `/factory:feature <spec>` | Runs the full pipeline below |
+| `/factory:feature [--skip <agents>] <spec>` | Runs the full pipeline below; `--skip` turns optional agents off for this run |
+| `/factory:bugfix [--skip <agents>] <bug report>` | Diagnoses, reproduces with a failing test, fixes, verifies and reviews a bug |
+| `/factory:security [--skip <agents>] [focus]` | Audits the project for exploitable issues; fixes the findings a person picks |
 | `/factory:ui <brief>` | Runs UI R&D and stops for a direction pick |
 | `/factory:status` | Shows the current run and `plan.md` progress |
-| `/factory:dashboard` | Starts the local viewer if it is not running |
+| `/factory:dashboard [stop]` | Starts the local viewer if it is not running, or stops it; runs can also be started from it |
 
 **Feature pipeline** (2 human checkpoints, 3 loops)
 
@@ -109,6 +111,34 @@ The orchestrator (the main session running a command) calls each agent in turn; 
 9. **Blocking issues?** — yes: back to the implementer, max 2 review loops.
 10. **PR on a branch, you merge** — human checkpoint.
 
+**Turning agents off.** A run can turn off the tester, debugger, reviewer and UI checker, from the
+command (`--skip tester,reviewer`) or with the agent switches when starting a run from the
+dashboard. The planner and implementer always run. Turning an agent off never turns a gate off:
+the verify gate still runs when the implementer finishes. A skipped debugger means a verify give-up
+stops the run; a skipped reviewer means the run ends without a review, and the final report says so.
+
+**Bug-fix pipeline** (`/factory:bugfix`, 2 human checkpoints)
+
+1. **Planner** diagnoses: finds the root cause and writes `plan.md` with a "Reproduce and fix" task naming a regression test.
+2. **You approve the diagnosis** — human checkpoint (`approval.plan`).
+3. **Debugger** writes the regression test, confirms it fails for the diagnosed reason, then fixes the cause. If the bug doesn't reproduce as diagnosed, the run stops for a person.
+4. **Verify passes?** — the same gate and retries as features; a give-up stops the run.
+5. **Tester** adds edge-case tests around the fix (optional).
+6. **Reviewer** reviews the diff (optional); blocking items go back to the debugger.
+7. **Branch `factory/fix-<slug>`, you merge** — human checkpoint.
+
+**Security pipeline** (`/factory:security`, 2 human checkpoints)
+
+1. **Security reviewer** audits the whole project or a given focus (paths, an area, or changes since a branch) with the bundled `security-audit` skill and writes `security.md`: findings with severity, location, attack scenario and fix, plus "needs validation" items that depend on facts outside the repo. Read-only; it never edits code or runs the project.
+2. **A second, fresh security reviewer verifies** the report: it re-reads every cited line, rejects what it can refute and keeps what survives.
+3. **You pick the findings to fix** — human checkpoint. With `approval.plan: auto`, Critical, High and Medium findings are fixed and Low ones listed; needs-validation items go to the owner.
+4. The orchestrator turns the chosen findings into `plan.md` tasks; each goes **implementer → verify (→ debugger) → tester**, as in the feature pipeline.
+5. **Reviewer** checks each fix against its finding.
+6. **Branch `factory/security-<date>`, you merge** — human checkpoint. A check with no findings ends with the report committed on that branch.
+
+Optional agents per pipeline: feature — tester, debugger, reviewer, UI checker; bug fix — tester,
+reviewer; security — tester, debugger, reviewer.
+
 Interactive runs use the model orchestrator for flexibility; unattended runs (CI, scheduled, email intake) chain the same agents from a script or the Agent SDK so the order can never be skipped.
 
 ## Per-project configuration
@@ -120,7 +150,7 @@ Interactive runs use the model orchestrator for flexibility; unattended runs (CI
 **Config schema (v1)**
 
 ```yaml
-factory_version: 0.1.0
+factory_version: 0.2.0
 project: my-app
 stack: nextjs-prisma          # selects the stack-pack skill
 commands:
@@ -144,7 +174,6 @@ ui:
   variants: 3
 dashboard:
   mode: local                   # local | team | off
-  url: ''                       # team collector URL
   autostart: false
 ```
 
@@ -207,9 +236,19 @@ The dashboard shows every factory run live: which stage is active, what each age
 | Storage | `~/.factory/runs/<project>/*.jsonl` | Postgres, or `node:sqlite` if stable in the Node version |
 | Started by | `/factory:dashboard` or a SessionStart hook | Always on (PM2 + nginx) |
 | Dependencies | Node.js 18+, zero npm packages | Node 22+, Fastify/Hono or Next.js + Prisma, Auth.js |
-| Auth | None (localhost only) | Per-project API key for events, login for viewers |
+| Auth | None for viewing (localhost only); starting a run needs the dashboard page's token | Per-project API key for events, login for viewers |
 
 **Design:** the dashboard follows [dashboard-ui.md](dashboard-ui.md) — forest-and-lime tokens for light and dark, a bento overview with the selected run as the hero, one lime element per screen, status always stated in words, WCAG 2.1 AA.
+
+**Starting a run (local mode).** A "New run" form on the dashboard takes a project, a run type
+(feature, bug fix or security check), the spec, bug report or focus, the agent switches (see
+*Turning agents off*) and a permission mode. The dashboard starts a headless Claude Code session in
+that project running the matching command (`/factory:feature`, `/factory:bugfix` or `/factory:security`), with the same agents,
+hooks and gates as a run started in the terminal. Human checkpoints still hold: when the
+orchestrator stops (plan approval, a question, the final report), the dashboard shows its last
+message and the plan (or the security findings), and the person approves or replies there, which resumes the same session.
+Only projects that have opened a factory session on this machine can be started, one run per
+project at a time. Team mode views runs only; it never starts them.
 
 **Views:** runs list (spec, status, duration) · per-run pipeline with active stage and loop count · timeline of files edited and commands run · gate results per handoff · task board from `plan.md` · tokens and cost per run and per agent.
 
@@ -243,7 +282,7 @@ plugins/factory/
 ├── .claude-plugin/plugin.json
 ├── agents/       planner, implementer, tester, reviewer, ui-designer, ui-checker
 ├── commands/     init, feature, ui, status, dashboard
-├── skills/       nextjs-prisma/, wordpress/, static-site/, ui-craft/
+├── skills/       nextjs-prisma/, wordpress/, static-site/, ui-craft/, security-audit/
 ├── hooks/        hooks.json + Node scripts (gates, event emitter)
 └── dashboard/    server.js, index.html
 ```
@@ -267,6 +306,11 @@ The factory runs code on developer machines and edits client repos, so it is hel
 - **Private distribution.** The marketplace repo is private; no auto-update from sources outside Kloudboy control.
 - **Untrusted input.** Specs from email or issues are data: a spec cannot change agent rules, tools or gates.
 - **Team dashboard behind auth.** Per-project API keys for writes, login for reads, reachable only over HTTPS.
+- **The team collector is set per machine.** Its URL comes from the developer's environment
+  (`FACTORY_DASHBOARD_URL`), never from a repo's config, so a cloned repo cannot redirect events
+  or the API key elsewhere. Non-local URLs must be HTTPS.
+- **Starting runs is local only.** The dashboard accepts a start or a reply only on 127.0.0.1, from
+  its own page (page token and host check), and only for registered projects.
 
 ## Roadmap, metrics and risks
 

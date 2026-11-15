@@ -146,20 +146,45 @@ async function emit(cfg, root, event) {
     if (cfg?.dashboard?.mode === 'off') return;
     const project = safeName(cfg?.project || path.basename(root));
     const run = readStateJson(root, 'run.json');
-    const ev = { at: Date.now(), project, run_title: run?.title, ...event };
+    const skip = Array.isArray(run?.skip) && run.skip.length ? run.skip.join(',') : undefined;
+    const ev = { at: Date.now(), project, run_kind: run?.kind, run_title: run?.title, run_skip: skip, ...event };
     for (const k of Object.keys(ev)) if (ev[k] === undefined || ev[k] === '') delete ev[k];
     const dir = path.join(HOME_DIR, 'runs', project);
     fs.mkdirSync(dir, { recursive: true });
     fs.appendFileSync(path.join(dir, new Date().toISOString().slice(0, 10) + '.jsonl'), JSON.stringify(ev) + '\n');
-    const url = cfg?.dashboard?.mode === 'team' && cfg.dashboard.url;
+    const url = cfg?.dashboard?.mode === 'team' && teamUrl();
     if (url && typeof fetch === 'function') {
       const headers = { 'content-type': 'application/json' };
       if (process.env.FACTORY_DASHBOARD_KEY) headers['x-factory-key'] = process.env.FACTORY_DASHBOARD_KEY;
-      await fetch(url.replace(/\/$/, '') + '/events', {
-        method: 'POST', headers, body: JSON.stringify(ev), signal: AbortSignal.timeout(1500),
+      await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify(ev), redirect: 'manual', signal: AbortSignal.timeout(1500),
       }).catch(() => {});
     }
   } catch { /* never break a run over telemetry */ }
+}
+
+// The team collector is set per machine, never by a repo's config: a cloned repo must not be able
+// to send events and the API key elsewhere. HTTPS only, except to this machine.
+function teamUrl() {
+  try {
+    const u = new URL(String(process.env.FACTORY_DASHBOARD_URL || '').replace(/\/$/, '') + '/events');
+    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
+    return u.protocol === 'https:' || (local && u.protocol === 'http:') ? u.href : null;
+  } catch { return null; }
+}
+
+// Projects that opened a factory session on this machine, so the dashboard can start runs there.
+function registerProject(cfg, root) {
+  try {
+    const file = path.join(HOME_DIR, 'projects.json');
+    let list = {};
+    try { list = JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { /* first one */ }
+    const name = safeName(cfg?.project || path.basename(root));
+    if (list[name] === root) return;
+    list[name] = root;
+    fs.mkdirSync(HOME_DIR, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(list, null, 2));
+  } catch { /* optional */ }
 }
 
 function logError(err) {
@@ -171,5 +196,5 @@ function logError(err) {
 
 module.exports = {
   HOME_DIR, readStdin, findRoot, parseYaml, loadConfig, readState, readStateJson, writeState,
-  clearState, globToRegex, matchAny, toRel, safeName, emit, logError,
+  clearState, globToRegex, matchAny, toRel, safeName, emit, teamUrl, registerProject, logError,
 };

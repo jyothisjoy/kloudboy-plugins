@@ -47,7 +47,6 @@ ui:
   variants: 3
 dashboard:
   mode: local               # local | team | off
-  url: ''                   # team collector URL (team mode)
   autostart: false
 ```
 

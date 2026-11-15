@@ -95,6 +95,9 @@ it. Below: pipeline (full width), then runs table and timeline side by side.
 | Sidebar item | 44 px pill; selected = `bg-tint` with `text-tint` |
 | Icon button | 44 px circle, `bg-surface`, always an accessible name |
 | Empty state | Tint circle, one title, one line telling the person what to run |
+| Button | 44 px, full radius, `body-s` weight 600. Primary: `bg-tint` fill with `text-tint`. Secondary: `bg-surface` with a `border-control` outline. Never lime |
+| New run dialog | Native `<dialog>`, `bg-surface`, radius 24, max 640 px wide: project, run type (feature, bug fix, security check), spec / bug report / focus, agent switches for that type (the always-on agents shown on and locked), permission mode with a one-line explanation |
+| Dashboard-started run card | Full width above the hero: title, status pill, start time · permission mode · agents off, the factory's last message in a sunken block, the plan in a disclosure, a reply box and actions |
 
 Every interactive element has hover, focus-visible (focus ring) and selected states.
 
@@ -111,6 +114,11 @@ Every interactive element has hover, focus-visible (focus ring) and selected sta
 | Stage finished, no gate | Done | Tint |
 | Stage not reached | Not started | Neutral |
 | Verify failed, agent sent back | (timeline) "Verify failed, sent back (attempt n)" | — |
+| Stage turned off for the run | Skipped | Neutral |
+| Dashboard-started run working | Working | Neutral (the lime stays on the stage) |
+| Dashboard-started run waiting for a reply | Waiting for you | Warning |
+| Dashboard-started run finished | Finished | Tint |
+| Dashboard-started session failed | Session failed | Danger |
 
 ## 7. Voice and formatting
 
