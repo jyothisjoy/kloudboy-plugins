@@ -1,0 +1,30 @@
+{
+  "description": "Factory gates (protected paths, agent write limits, fast check, verify on handoff) and run events for the dashboard.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" session-start", "timeout": 15 } ] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" pre-edit", "timeout": 15 } ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" pre-agent", "timeout": 15 } ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" post-tool", "timeout": 60 } ]
+      }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" subagent-stop", "timeout": 900 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.js\" stop", "timeout": 15 } ] }
+    ]
+  }
+}

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factory runs</title>
+<style>
+/* Tokens and rules: docs/dashboard-ui.md */
+:root, [data-theme="light"] {
+  --bg-canvas:#F4F3EF; --bg-surface:#FFFFFF; --bg-sunken:#E9E8E3; --bg-tint:#E3EFE5;
+  --bg-brand:linear-gradient(150deg,#163832,#0B2B26);
+  --border:#E7E6E1; --border-control:#858C87;
+  --text-primary:#0E1512; --text-secondary:#5F6762; --text-on-brand:#FFFFFF; --text-on-brand-muted:#B7CFC0; --text-tint:#163832;
+  --action-accent:#C8F169; --on-action-accent:#0E1A06;
+  --warning-bg:#FBEFD2; --warning-text:#7A5410; --danger-bg:#FDECEA; --danger-text:#B42318;
+  --focus-ring:#235347;
+  --font:Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+[data-theme="dark"] {
+  --bg-canvas:#0A0F0D; --bg-surface:#141A17; --bg-sunken:#1C2320; --bg-tint:#1C2A24;
+  --bg-brand:linear-gradient(150deg,#163832,#051F20);
+  --border:#232B27; --border-control:#66726C;
+  --text-primary:#EEF2EE; --text-secondary:#8A958F; --text-tint:#C8F169;
+  --warning-bg:#3A2E12; --warning-text:#F2D28B; --danger-bg:#3A1512; --danger-text:#F97066;
+  --focus-ring:#C8F169;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg-canvas); color:var(--text-primary);
+  font:400 15px/22px var(--font); }
+.num { font-variant-numeric:tabular-nums; }
+button { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+.app { display:grid; grid-template-columns:240px 1fr; min-height:100vh; }
+aside { background:var(--bg-surface); border-right:1px solid var(--border); padding:20px 12px; }
+.logo { display:flex; align-items:center; gap:10px; padding:0 8px 20px; font:800 18px/24px var(--font); letter-spacing:-0.02em; }
+.logo i { width:28px; height:28px; border-radius:8px; background:#163832; display:inline-block; position:relative; }
+.logo i::after { content:""; position:absolute; width:8px; height:8px; border-radius:50%; background:#C8F169; left:10px; top:10px; }
+.caption { font:500 12px/16px var(--font); color:var(--text-secondary); }
+.nav-title { padding:0 8px 8px; }
+.proj { display:flex; justify-content:space-between; align-items:center; width:100%; min-height:44px; padding:0 12px;
+  border:0; border-radius:999px; background:none; cursor:pointer; text-align:left; font:600 14px/20px var(--font); }
+.proj:hover { background:var(--bg-sunken); }
+.proj[aria-current="true"] { background:var(--bg-tint); color:var(--text-tint); }
+main { padding:24px; max-width:1280px; width:100%; }
+header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; }
+h1 { font:800 22px/28px var(--font); letter-spacing:-0.03em; margin:0; }
+h2 { font:700 16px/22px var(--font); letter-spacing:-0.01em; margin:0 0 12px; }
+.icon-btn { width:44px; height:44px; border-radius:50%; border:0; background:var(--bg-surface); cursor:pointer; font-size:22px; line-height:1; flex:none; }
+.bento { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+.card { background:var(--bg-surface); border-radius:24px; padding:20px; min-width:0; }
+[data-theme="dark"] .card { border:1px solid var(--border); }
+.hero { grid-column:span 6; grid-row:span 2; background:var(--bg-brand); color:var(--text-on-brand); display:flex; flex-direction:column; gap:8px; }
+.hero .caption { color:var(--text-on-brand-muted); }
+.hero .big { font:700 40px/44px var(--font); letter-spacing:-0.045em; }
+.hero .title { font:700 18px/24px var(--font); }
+.stat { grid-column:span 3; }
+.stat .big { font:700 24px/30px var(--font); letter-spacing:-0.03em; margin-top:4px; }
+.wide { grid-column:span 12; }
+.half { grid-column:span 6; }
+.pill { display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:999px; font:600 12px/16px var(--font); white-space:nowrap; }
+.p-accent { background:var(--action-accent); color:var(--on-action-accent); }
+.p-tint { background:var(--bg-tint); color:var(--text-tint); }
+.p-neutral { background:var(--bg-sunken); color:var(--text-secondary); }
+.p-warning { background:var(--warning-bg); color:var(--warning-text); }
+.p-onbrand { background:rgba(255,255,255,0.14); color:var(--text-on-brand); }
+.p-danger { background:var(--danger-bg); color:var(--danger-text); }
+.stages { display:flex; flex-wrap:wrap; gap:8px; }
+.stage { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:12px 16px; border-radius:16px; background:var(--bg-sunken); min-width:140px; }
+.stage b { font:600 14px/20px var(--font); }
+table { width:100%; border-collapse:collapse; font:400 14px/20px var(--font); }
+th { text-align:left; font:500 12px/16px var(--font); color:var(--text-secondary); padding:0 8px 8px; }
+td { height:52px; padding:0 8px; border-top:1px solid var(--border); }
+td.r, th.r { text-align:right; }
+tr.row { cursor:pointer; }
+tr.row:hover td { background:var(--bg-canvas); }
+tr.row[aria-selected="true"] td { background:var(--bg-tint); }
+.list { display:flex; flex-direction:column; gap:4px; max-height:420px; overflow:auto; }
+.li { display:grid; grid-template-columns:72px 120px minmax(0,1fr); overflow-wrap:anywhere; gap:12px; padding:8px 4px; border-top:1px solid var(--border); font:400 14px/20px var(--font); }
+.li:first-child { border-top:0; }
+.empty { display:flex; flex-direction:column; align-items:flex-start; gap:8px; padding:24px; }
+.empty .dot { width:40px; height:40px; border-radius:50%; background:var(--bg-tint); }
+code { font:500 13px/18px ui-monospace, SFMono-Regular, Consolas, monospace; }
+@media (max-width:1199px) { .stat { grid-column:span 6; } .hero, .half { grid-column:span 12; } }
+@media (max-width:767px) { .app { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--border); } main { padding:16px; } .stat { grid-column:span 6; } .li { grid-template-columns:64px minmax(0,1fr); } .li > :nth-child(2), th:nth-child(2), td:nth-child(2) { display:none; } }
+@media (prefers-reduced-motion:no-preference) { .proj, tr.row td { transition:background 120ms ease-out; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="logo"><i aria-hidden="true"></i>Factory</div>
+    <div class="caption nav-title">Projects</div>
+    <nav id="projects" aria-label="Projects"></nav>
+  </aside>
+  <main>
+    <header>
+      <div><h1 id="page-title">Runs</h1><div class="caption" id="subtitle">Live from ~/.factory/runs</div></div>
+      <button class="icon-btn" id="theme" aria-label="Switch to dark mode"><span aria-hidden="true">◐</span></button>
+    </header>
+    <div id="content"></div>
+  </main>
+</div>
+<script>
+'use strict';
+const STAGES = ['planner', 'ui-designer', 'implementer', 'tester', 'debugger', 'reviewer', 'ui-checker'];
+const LABEL = { planner: 'Planner', 'ui-designer': 'UI designer', implementer: 'Implementer', tester: 'Tester', debugger: 'Debugger', 'ui-checker': 'UI checker', reviewer: 'Reviewer', orchestrator: 'Orchestrator' };
+const state = { projects: [], project: null, events: [], run: null, stream: null };
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const pill = (text, kind) => h('span', { class: 'pill p-' + kind }, text);
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+function fmtTime(ms) {
+  const d = new Date(ms);
+  const mon = d.toLocaleString('en-GB', { month: 'short' });
+  let hr = d.getHours(); const ap = hr >= 12 ? 'pm' : 'am'; hr = hr % 12 || 12;
+  return `${d.getDate()} ${mon}, ${hr}:${String(d.getMinutes()).padStart(2, '0')} ${ap}`;
+}
+function fmtClock(ms) { return fmtTime(ms).split(', ')[1]; }
+function fmtDur(ms) {
+  const m = Math.round(ms / 60000);
+  return m < 1 ? 'under 1 min' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function groupRuns(events) {
+  const runs = new Map();
+  for (const e of events) {
+    const id = e.session || 'no-session';
+    if (!runs.has(id)) runs.set(id, { id, events: [] });
+    runs.get(id).events.push(e);
+  }
+  return [...runs.values()].map(analyse).sort((a, b) => b.last - a.last);
+}
+
+function analyse(run) {
+  const ev = run.events.sort((a, b) => a.at - b.at);
+  run.first = ev[0].at; run.last = ev.at(-1).at;
+  run.title = [...ev].reverse().find((e) => e.run_title)?.run_title || 'Untitled run';
+  run.stages = {};
+  for (const e of ev) {
+    if (!STAGES.includes(e.agent)) continue;
+    const s = run.stages[e.agent] ||= { starts: 0, active: false, result: null, tokens: 0 };
+    if (e.type === 'agent_start') { s.starts++; s.active = true; s.result = null; }
+    if (e.type === 'agent_stop') { s.active = false; s.result = e.result; s.tokens += Number(e.tokens) || 0; }
+  }
+  run.loops = run.stages.implementer?.starts || 0;
+  run.reviews = run.stages.reviewer?.starts || 0;
+  // The latest verify outcome decides: a failure the debugger later fixed is not a failed run.
+  run.failed = [...ev].reverse().find((e) => e.type === 'agent_stop' && /^verify_/.test(e.result || ''))?.result === 'verify_failed';
+  run.active = STAGES.find((s) => run.stages[s]?.active) || null;
+  run.tokens = ev.reduce((n, e) => n + (e.type === 'agent_stop' ? Number(e.tokens) || 0 : 0), 0);
+  run.files = [...new Set(ev.filter((e) => e.path).map((e) => e.path))];
+  run.passes = ev.filter((e) => e.result === 'verify_passed').length;
+  run.fails = ev.filter((e) => e.result === 'verify_failed').length;
+  // The main session stops (run_end) while a background agent may still be working.
+  const stopped = Date.now() - run.last > 30 * 60000 || (ev.at(-1).type === 'run_end' && !run.active);
+  run.status = run.failed ? ['Verify failed', 'danger'] : stopped ? ['Stopped', 'neutral'] : ['Running', 'accent'];
+  return run;
+}
+
+function stagePill(s) {
+  if (!s) return pill('Not started', 'neutral');
+  if (s.active) return pill('Working', 'accent');
+  if (s.result === 'verify_failed') return pill('Verify failed', 'danger');
+  if (s.result === 'verify_passed') return pill('Verify passed', 'tint');
+  return pill('Done', 'tint');
+}
+
+function fmtTokens(n) {
+  return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+function stageMeta(s) {
+  const runs = `${s.starts} run${s.starts === 1 ? '' : 's'}`;
+  return s.tokens ? `${runs} · ${fmtTokens(s.tokens)} tokens` : runs;
+}
+
+function eventText(e) {
+  if (e.type === 'agent_start') return `${LABEL[e.agent] || e.agent} started`;
+  if (e.type === 'agent_stop') return `${LABEL[e.agent] || e.agent} finished · ${String(e.result || 'done').replace('_', ' ')}`;
+  if (e.type === 'gate' && e.check === 'fast') return `Fast check failed on ${e.path}`;
+  if (e.type === 'gate') return `Verify failed, sent back (attempt ${e.attempt})`;
+  if (e.type === 'run_end') return 'Session paused or ended';
+  if (e.tool === 'Bash') return `Ran ${e.bin || 'a command'}`;
+  if (e.path) return `${e.tool} ${e.path}`;
+  return e.type;
+}
+
+function render() {
+  const nav = document.getElementById('projects');
+  nav.replaceChildren(...state.projects.map((p) => h('button', {
+    class: 'proj', 'aria-current': String(p.name === state.project),
+    onclick: () => selectProject(p.name),
+  }, h('span', {}, p.name))));
+
+  const root = document.getElementById('content');
+  document.getElementById('page-title').textContent = state.project ? state.project : 'Runs';
+  if (!state.project) {
+    root.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'dot' }), h('h2', {}, 'No factory runs yet'),
+      h('div', {}, 'Run /factory:init in a project, then /factory:feature. Runs appear here as they happen.')));
+    return;
+  }
+  const runs = groupRuns(state.events);
+  if (!runs.length) { root.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'dot' }), h('h2', {}, 'No runs in the last 14 days'))); return; }
+  const run = runs.find((r) => r.id === state.run) || runs[0];
+  state.run = run.id;
+
+  const passes = runs.reduce((n, r) => n + r.passes, 0), fails = runs.reduce((n, r) => n + r.fails, 0);
+  const rate = passes + fails ? `${Math.round((passes / (passes + fails)) * 1000) / 10}%` : '—';
+  const reviewed = runs.filter((r) => r.reviews);
+  const avgLoops = reviewed.length ? (reviewed.reduce((n, r) => n + r.reviews, 0) / reviewed.length).toFixed(1) : '—';
+
+  const hero = h('section', { class: 'card hero', 'aria-label': 'Selected run' },
+    h('div', { class: 'caption' }, run === runs[0] ? 'Latest run' : 'Selected run'),
+    h('div', { class: 'title' }, run.title),
+    h('div', { class: 'big' }, run.active ? LABEL[run.active] : run.status[0]),
+    h('div', {}, pill(run.status[0], run.status[1] === 'danger' ? 'danger' : 'onbrand')),
+    h('div', { class: 'caption num' }, `Started ${fmtTime(run.first)} · ${fmtDur(run.last - run.first)} · ${run.loops} implementer passes`
+      + (run.tokens ? ` · ${fmtTokens(run.tokens)} tokens` : '')));
+
+  const stat = (label, value) => h('section', { class: 'card stat' }, h('div', { class: 'caption' }, label), h('div', { class: 'big num' }, value));
+
+  const stages = h('section', { class: 'card wide' }, h('h2', {}, 'Pipeline'),
+    h('div', { class: 'stages' }, STAGES.filter((s) => run.stages[s] || ['planner', 'implementer', 'tester', 'reviewer'].includes(s)).map((s) =>
+      h('div', { class: 'stage' }, h('b', {}, LABEL[s]), stagePill(run.stages[s]),
+        h('span', { class: 'caption num' }, run.stages[s] ? stageMeta(run.stages[s]) : '')))));
+
+  const table = h('section', { class: 'card half' }, h('h2', {}, 'Runs'),
+    h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Run'), h('th', {}, 'Started'), h('th', { class: 'r' }, 'Duration'), h('th', {}, 'Status'))),
+      h('tbody', {}, runs.slice(0, 30).map((r) => h('tr', {
+        class: 'row', tabindex: '0', 'aria-selected': String(r.id === run.id),
+        onclick: () => { state.run = r.id; render(); },
+        onkeydown: (e) => { if (e.key === 'Enter') { state.run = r.id; render(); } },
+      }, h('td', {}, r.title), h('td', { class: 'num' }, fmtTime(r.first)), h('td', { class: 'r num' }, fmtDur(r.last - r.first)),
+        h('td', {}, r.status[1] === 'accent' ? pill('Running', 'neutral') : pill(r.status[0], r.status[1])))))));
+
+  const timeline = h('section', { class: 'card half' }, h('h2', {}, 'Timeline'),
+    h('div', { class: 'list' }, [...run.events].reverse().slice(0, 150).map((e) =>
+      h('div', { class: 'li' }, h('span', { class: 'caption num' }, fmtClock(e.at)), h('span', { class: 'caption' }, LABEL[e.agent] || e.agent || ''), h('span', {}, eventText(e))))));
+
+  root.replaceChildren(h('div', { class: 'bento' }, hero,
+    stat('Verify pass rate, 14 days', rate), stat('Runs, 14 days', String(runs.length)),
+    stat('Average review rounds', avgLoops), stat('Files touched, this run', String(run.files.length)),
+    stages, table, timeline));
+}
+
+async function loadEvents() {
+  if (!state.project) return render();
+  state.events = await (await fetch('/api/events?project=' + encodeURIComponent(state.project))).json();
+  render();
+}
+
+function selectProject(name) {
+  state.project = name; state.run = null; store.set('factory.project', name);
+  if (state.stream) state.stream.close();
+  state.stream = new EventSource('/api/stream?project=' + encodeURIComponent(name));
+  state.stream.onmessage = loadEvents;
+  loadEvents();
+}
+
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  document.getElementById('theme').setAttribute('aria-label', t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+}
+document.getElementById('theme').addEventListener('click', () => {
+  const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  setTheme(t); store.set('factory.theme', t);
+});
+setTheme(store.get('factory.theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+(async () => {
+  state.projects = await (await fetch('/api/projects')).json();
+  const saved = store.get('factory.project');
+  const pick = state.projects.find((p) => p.name === saved)?.name || state.projects[0]?.name || null;
+  if (pick) selectProject(pick); else render();
+  setInterval(render, 30000);
+})();
+</script>
+</body>
+</html>

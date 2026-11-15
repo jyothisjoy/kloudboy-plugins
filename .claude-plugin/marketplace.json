@@ -1,0 +1,14 @@
+{
+  "name": "kloudboy",
+  "owner": { "name": "Kloudboy Technologies" },
+  "metadata": { "description": "Kloudboy's private Claude Code plugins." },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./plugins/factory",
+      "description": "Software factory: plan, build, test and review any project from a spec, with quality gates and a run dashboard.",
+      "version": "0.1.0",
+      "category": "development"
+    }
+  ]
+}
